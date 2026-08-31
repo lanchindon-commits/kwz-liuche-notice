@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>留車注意事項｜KWZ Scooter Store</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root{
+    --green:#06c755; --green-dark:#04a344; --ink:#1a1a1a; --sub:#8b8f97;
+    --faint:#b0b3ba; --line:#eceef0; --bg:#f2f3f5;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Noto Sans TC', system-ui, -apple-system, sans-serif;
+    background:var(--bg); color:var(--ink); -webkit-tap-highlight-color:transparent;
+  }
+  .wrap{ max-width:480px; margin:0 auto; min-height:100vh; background:#fff; display:flex; flex-direction:column; }
+  .topbar{ display:flex; align-items:center; gap:10px; padding:16px 20px 14px; border-bottom:1px solid var(--line); }
+  .topbar img{ width:34px; height:34px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+  .topbar .name{ font-weight:700; font-size:14px; }
+  .topbar .sub{ font-size:11px; color:var(--sub); }
+  .screen{ padding:20px 20px 32px; display:none; flex-direction:column; gap:18px; }
+  .screen.active{ display:flex; }
+  h1{ font-size:18px; font-weight:900; margin:0; }
+  .lead{ font-size:12.5px; color:var(--sub); margin-top:4px; }
+  .field-label{ font-size:12.5px; color:var(--sub); font-weight:500; margin-bottom:6px; }
+  .plate-row{ display:flex; align-items:center; gap:8px; }
+  .plate-row input{
+    flex:1; min-width:0; text-align:center; background:#fff; border:1.5px solid var(--green);
+    border-radius:10px; padding:12px 4px; font-size:16px; font-weight:700; color:var(--ink);
+    letter-spacing:1px; font-family:inherit; text-transform:uppercase;
+  }
+  .plate-row input:focus{ outline:none; border-color:var(--green-dark); }
+  .plate-row .dash{ font-size:20px; font-weight:900; color:var(--faint); }
+  .terms{ display:flex; flex-direction:column; gap:12px; background:#fafbfb; border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .term{ display:flex; gap:10px; align-items:flex-start; }
+  .term .num{ width:18px; height:18px; border-radius:50%; background:var(--green); color:#fff; font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+  .term p{ margin:0; font-size:12.5px; color:#3a3d42; line-height:1.6; }
+  .agree{ display:flex; align-items:center; gap:10px; padding:4px 2px; cursor:pointer; user-select:none; }
+  .agree .box{ width:22px; height:22px; border-radius:6px; border:1.5px solid #d9dbe0; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background .15s,border-color .15s; }
+  .agree .box svg{ opacity:0; transition:opacity .15s; }
+  .agree.checked .box{ background:var(--green); border-color:var(--green); }
+  .agree.checked .box svg{ opacity:1; }
+  .agree span.txt{ font-size:12.5px; color:#3a3d42; font-weight:500; }
+  button.primary{
+    text-align:center; padding:13px 0; background:var(--green); border:none; border-radius:10px;
+    font-size:14px; font-weight:700; color:#fff; font-family:inherit; cursor:pointer; transition:background .15s,opacity .15s;
+  }
+  button.primary:disabled{ background:#c9ccd1; cursor:not-allowed; }
+  button.secondary{
+    text-align:center; padding:14px 0; background:#fff; border:1px solid #d9dbe0; border-radius:10px;
+    font-size:14px; font-weight:700; color:#6b6f76; font-family:inherit; cursor:pointer;
+  }
+  .footnote{ font-size:10.5px; color:var(--faint); line-height:1.6; text-align:center; }
+  .icon-circle{ width:72px; height:72px; border-radius:50%; background:#eafcf1; display:flex; align-items:center; justify-content:center; margin:0 auto; }
+  .center{ text-align:center; }
+  .chip{ display:inline-flex; align-items:center; gap:6px; background:#f4f5f6; border-radius:8px; padding:8px 16px; font-size:12px; color:var(--sub); }
+  .chip b{ color:var(--ink); font-size:13px; }
+  .error-box{ background:#fff4f2; border:1px solid #ffd6cf; color:#b3261e; font-size:12.5px; border-radius:10px; padding:12px 14px; line-height:1.6; }
+  .loading{ font-size:12.5px; color:var(--sub); text-align:center; padding:40px 0; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="topbar">
+    <img src="shop-logo.jpg" alt="">
+    <div>
+      <div class="name">新莊忍店機車行</div>
+      <div class="sub">留車確認</div>
+    </div>
+  </div>
+
+  <!-- 載入中 -->
+  <div class="screen active" id="screen-loading">
+    <div class="loading" id="loading-text">頁面載入中…</div>
+  </div>
+
+  <!-- STEP 1：注意事項 + 車牌 -->
+  <div class="screen" id="screen-notice">
+    <div>
+      <h1>留車注意事項</h1>
+      <div class="lead">請詳閱以下內容並確認同意</div>
+    </div>
+
+    <div>
+      <div class="field-label">請輸入您的車牌號碼</div>
+      <div class="plate-row">
+        <input type="text" id="plate1" maxlength="6" placeholder="511" inputmode="text">
+        <div class="dash">-</div>
+        <input type="text" id="plate2" maxlength="6" placeholder="KZQ" inputmode="text">
+      </div>
+    </div>
+
+    <div class="terms">
+      <div class="term"><div class="num">1</div><p>送修車輛如有明顯凹痕、烤漆損傷，將於交車前主動告知，若未告知恕不另行負責。</p></div>
+      <div class="term"><div class="num">2</div><p>車廂內貴重物品請自行取出，本店恕不負保管責任。</p></div>
+      <div class="term"><div class="num">3</div><p>維修完成後將透過 LINE 通知您牽車，請於通知後 7 日內完成牽車。</p></div>
+      <div class="term"><div class="num">4</div><p>逾期未取車輛，本店恕無法繼續負保管責任。</p></div>
+      <div class="term"><div class="num">5</div><p>電子儀器（如行車紀錄器）請於交車前事先主動確認並告知功能正常，如未確認，本店恕不負責。</p></div>
+    </div>
+
+    <div class="agree" id="agree-row">
+      <div class="box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+      <span class="txt">我已閱讀並同意以上注意事項</span>
+    </div>
+
+    <div id="notice-error"></div>
+
+    <button class="primary" id="submit-btn" disabled>確認送出</button>
+
+    <div class="footnote">送出後，我們才能透過 LINE 通知您維修進度與取車提醒</div>
+  </div>
+
+  <!-- STEP 2：是否借代步車 -->
+  <div class="screen" id="screen-ask">
+    <div class="topbar" style="border:none; padding:0; margin-bottom:4px;">
+      <div class="icon-circle" style="width:34px;height:34px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#06c755" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+      </div>
+      <div>
+        <div class="name">已收到您的同意</div>
+        <div class="sub" id="ask-plate-sub">—</div>
+      </div>
+    </div>
+
+    <div class="icon-circle">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#06c755" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="18.5" cy="17.5" r="3.5"/><path d="M15 6h4l3 6.5"/><path d="M2 17.5h3.5M9 17.5h6l-3-9H5l-1.5 4"/><path d="M12 6h-2"/></svg>
+    </div>
+
+    <div class="center">
+      <h1>是否需要借用代步車？</h1>
+      <div class="lead">留車維修期間，可申請代步車方便您通勤</div>
+    </div>
+
+    <button class="primary" id="loaner-yes">是，我要借代步車</button>
+    <button class="secondary" id="loaner-no">否，不需要</button>
+  </div>
+
+  <!-- 完成（不借代步車） -->
+  <div class="screen" id="screen-done">
+    <div class="icon-circle" style="margin-top:20px;">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#06c755" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+    </div>
+    <div class="center">
+      <h1>登記完成</h1>
+      <div class="lead">我們已收到您的資料<br>維修完成後將透過 LINE 通知您</div>
+    </div>
+    <div class="center"><span class="chip">車牌　<b id="done-plate">—</b></span></div>
+  </div>
+
+</div>
+
+<script>
+  // ============================================
+  // 設定區
+  // ============================================
+  var LIFF_ID = 'PUT_YOUR_LIFF_ID_HERE'; // TODO: 在 LINE Developers Console 註冊此頁為 LIFF 後，把 LIFF ID 貼在這裡
+  var LOANER_CAR_URL = 'https://liff.line.me/2009551033-j7lWjkjJ';
+  var SUPABASE_URL = 'https://hxzdmosganinyhtrswlj.supabase.co';
+  var SUPABASE_ANON_KEY = 'sb_publishable_AYWfHD9vBAVk4Fv1tcuEVw_RTPM71RQ';
+
+  var lineUserId = null;
+  var lineDisplayName = null;
+  var agreed = false;
+
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(function (el) { el.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+  }
+
+  function showLoadError(msg) {
+    document.getElementById('loading-text').innerHTML =
+      '<div class="error-box">' + msg + '</div>';
+  }
+
+  function getPlate() {
+    var p1 = document.getElementById('plate1').value.trim().toUpperCase();
+    var p2 = document.getElementById('plate2').value.trim().toUpperCase();
+    if (!p1 || !p2) return null;
+    return p1 + '-' + p2;
+  }
+
+  function updateSubmitState() {
+    var btn = document.getElementById('submit-btn');
+    btn.disabled = !(agreed && getPlate());
+  }
+
+  document.getElementById('agree-row').addEventListener('click', function () {
+    agreed = !agreed;
+    this.classList.toggle('checked', agreed);
+    updateSubmitState();
+  });
+  document.getElementById('plate1').addEventListener('input', updateSubmitState);
+  document.getElementById('plate2').addEventListener('input', updateSubmitState);
+
+  document.getElementById('submit-btn').addEventListener('click', function () {
+    var carNo = getPlate();
+    var errBox = document.getElementById('notice-error');
+    errBox.innerHTML = '';
+    if (!carNo || !agreed) return;
+
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '送出中…';
+
+    fetch(SUPABASE_URL + '/rest/v1/rpc/bind_line_user', {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        p_car_no: carNo,
+        p_line_user_id: lineUserId,
+        p_line_display_name: lineDisplayName
+      })
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data && data.error) {
+          errBox.innerHTML = '<div class="error-box">' + data.error + '</div>';
+          btn.disabled = false;
+          btn.textContent = '確認送出';
+          return;
+        }
+        window.__carNo = carNo;
+        document.getElementById('ask-plate-sub').textContent = carNo;
+        document.getElementById('done-plate').textContent = carNo;
+        showScreen('screen-ask');
+      })
+      .catch(function () {
+        errBox.innerHTML = '<div class="error-box">送出失敗，請檢查網路連線後再試一次</div>';
+        btn.disabled = false;
+        btn.textContent = '確認送出';
+      });
+  });
+
+  document.getElementById('loaner-no').addEventListener('click', function () {
+    showScreen('screen-done');
+  });
+
+  document.getElementById('loaner-yes').addEventListener('click', function () {
+    var url = LOANER_CAR_URL
+      + '?car_no=' + encodeURIComponent(window.__carNo || '')
+      + '&line_user_id=' + encodeURIComponent(lineUserId || '');
+    window.location.href = url;
+  });
+
+  // ============================================
+  // LIFF 初始化
+  // ============================================
+  function initLiff() {
+    if (LIFF_ID === 'PUT_YOUR_LIFF_ID_HERE') {
+      showLoadError('尚未設定 LIFF ID，請洽系統管理者完成設定。');
+      return;
+    }
+    liff.init({ liffId: LIFF_ID }).then(function () {
+      if (!liff.isLoggedIn()) {
+        liff.login();
+        return;
+      }
+      return liff.getProfile().then(function (profile) {
+        lineUserId = profile.userId;
+        lineDisplayName = profile.displayName;
+        showScreen('screen-notice');
+      });
+    }).catch(function (err) {
+      showLoadError('請透過 LINE 開啟此頁面才能完成留車登記。');
+      console.error(err);
+    });
+  }
+
+  initLiff();
+</script>
+</body>
+</html>
