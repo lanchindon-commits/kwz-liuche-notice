@@ -260,9 +260,22 @@
     }
     liff.init({ liffId: LIFF_ID }).then(function () {
       if (!liff.isLoggedIn()) {
-        liff.login();
+        if (!liff.isInClient()) {
+          // 外部瀏覽器：避免登入迴圈，同一頁只自動導向登入一次
+          var loginAttempted = false;
+          try { loginAttempted = sessionStorage.getItem('liffLoginAttempted') === '1'; } catch (e) {}
+          if (loginAttempted) {
+            showLoadError('登入失敗，請改用 LINE App 右上角掃描器開啟此頁面。');
+            return;
+          }
+          try { sessionStorage.setItem('liffLoginAttempted', '1'); } catch (e) {}
+          liff.login({ redirectUri: location.href.split('?')[0] });
+        } else {
+          showLoadError('登入狀態異常，請重新整理頁面，或改用 LINE App 右上角掃描器開啟此頁面。');
+        }
         return;
       }
+      try { sessionStorage.removeItem('liffLoginAttempted'); } catch (e) {}
       return liff.getProfile().then(function (profile) {
         lineUserId = profile.userId;
         lineDisplayName = profile.displayName;
