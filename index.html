@@ -139,6 +139,19 @@
     <button class="secondary" id="loaner-no">否，不需要</button>
   </div>
 
+  <!-- STEP 1.5：多車 / 衝突確認 -->
+  <div class="screen" id="screen-confirm">
+    <div class="icon-circle" style="margin-top:20px; background:#fff4f2;">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#b3261e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div class="center">
+      <h1>請再確認一下</h1>
+      <div class="lead" id="confirm-message">—</div>
+    </div>
+    <div id="confirm-buttons" style="display:flex; flex-direction:column; gap:10px;"></div>
+    <button class="secondary" id="confirm-cancel">取消，我再檢查一次車牌</button>
+  </div>
+
   <!-- 完成（不借代步車） -->
   <div class="screen" id="screen-done">
     <div class="icon-circle" style="margin-top:20px;">
@@ -196,6 +209,94 @@
   document.getElementById('plate1').addEventListener('input', updateSubmitState);
   document.getElementById('plate2').addEventListener('input', updateSubmitState);
 
+  function attemptBind(carNo, confirmAction, oldCarNo) {
+    var body = {
+      p_car_no: carNo,
+      p_line_user_id: lineUserId,
+      p_line_display_name: lineDisplayName
+    };
+    if (confirmAction) body.p_confirm_action = confirmAction;
+    if (oldCarNo) body.p_old_car_no = oldCarNo;
+
+    return fetch(SUPABASE_URL + '/rest/v1/rpc/bind_line_user', {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    }).then(function (res) { return res.json(); });
+  }
+
+  function finishBind(carNo) {
+    window.__carNo = carNo;
+    document.getElementById('ask-plate-sub').textContent = carNo;
+    document.getElementById('done-plate').textContent = carNo;
+    showScreen('screen-ask');
+  }
+
+  function showConfirmScreen(carNo, data) {
+    document.getElementById('confirm-message').textContent =
+      data.message || '您先前已綁定其他車牌，這次要新增一台車，還是這台打錯了要修正？';
+
+    var wrap = document.getElementById('confirm-buttons');
+    wrap.innerHTML = '';
+
+    var addBtn = document.createElement('button');
+    addBtn.className = 'primary';
+    addBtn.textContent = '沒錯，我要新增這台車';
+    addBtn.addEventListener('click', function () {
+      addBtn.disabled = true;
+      addBtn.textContent = '送出中…';
+      attemptBind(carNo, 'add', null).then(function (res) {
+        if (res && res.success) {
+          finishBind(carNo);
+        } else {
+          addBtn.disabled = false;
+          addBtn.textContent = '沒錯，我要新增這台車';
+          alert((res && res.message) || '送出失敗，請重新嘗試');
+        }
+      }).catch(function () {
+        addBtn.disabled = false;
+        addBtn.textContent = '沒錯，我要新增這台車';
+        alert('送出失敗，請檢查網路連線後再試一次');
+      });
+    });
+    wrap.appendChild(addBtn);
+
+    var existingCars = data.existing_cars || [];
+    existingCars.forEach(function (oldCar) {
+      var repBtn = document.createElement('button');
+      repBtn.className = 'secondary';
+      repBtn.textContent = '車牌 ' + oldCar + ' 打錯了，改成這台';
+      repBtn.addEventListener('click', function () {
+        repBtn.disabled = true;
+        repBtn.textContent = '送出中…';
+        attemptBind(carNo, 'replace', oldCar).then(function (res) {
+          if (res && res.success) {
+            finishBind(carNo);
+          } else {
+            repBtn.disabled = false;
+            repBtn.textContent = '車牌 ' + oldCar + ' 打錯了，改成這台';
+            alert((res && res.message) || '送出失敗，請重新嘗試');
+          }
+        }).catch(function () {
+          repBtn.disabled = false;
+          repBtn.textContent = '車牌 ' + oldCar + ' 打錯了，改成這台';
+          alert('送出失敗，請檢查網路連線後再試一次');
+        });
+      });
+      wrap.appendChild(repBtn);
+    });
+
+    showScreen('screen-confirm');
+  }
+
+  document.getElementById('confirm-cancel').addEventListener('click', function () {
+    showScreen('screen-notice');
+  });
+
   document.getElementById('submit-btn').addEventListener('click', function () {
     var carNo = getPlate();
     var errBox = document.getElementById('notice-error');
@@ -206,31 +307,20 @@
     btn.disabled = true;
     btn.textContent = '送出中…';
 
-    fetch(SUPABASE_URL + '/rest/v1/rpc/bind_line_user', {
-      method: 'POST',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        p_car_no: carNo,
-        p_line_user_id: lineUserId,
-        p_line_display_name: lineDisplayName
-      })
-    })
-      .then(function (res) { return res.json(); })
+    attemptBind(carNo, null, null)
       .then(function (data) {
-        if (data && data.error) {
-          errBox.innerHTML = '<div class="error-box">' + data.error + '</div>';
-          btn.disabled = false;
-          btn.textContent = '確認送出';
+        btn.disabled = false;
+        btn.textContent = '確認送出';
+
+        if (data && data.need_confirm) {
+          showConfirmScreen(carNo, data);
           return;
         }
-        window.__carNo = carNo;
-        document.getElementById('ask-plate-sub').textContent = carNo;
-        document.getElementById('done-plate').textContent = carNo;
-        showScreen('screen-ask');
+        if (data && data.error) {
+          errBox.innerHTML = '<div class="error-box">' + (data.message || '發生錯誤，請重新輸入') + '</div>';
+          return;
+        }
+        finishBind(carNo);
       })
       .catch(function () {
         errBox.innerHTML = '<div class="error-box">送出失敗，請檢查網路連線後再試一次</div>';
