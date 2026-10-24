@@ -60,6 +60,14 @@
   .chip b{ color:var(--ink); font-size:13px; }
   .error-box{ background:#fff4f2; border:1px solid #ffd6cf; color:#b3261e; font-size:12.5px; border-radius:10px; padding:12px 14px; line-height:1.6; }
   .loading{ font-size:12.5px; color:var(--sub); text-align:center; padding:40px 0; }
+  /* 已綁定車牌選擇區 */
+  .bound-list{ display:flex; flex-direction:column; gap:8px; }
+  .bound-item{ display:flex; align-items:center; gap:10px; padding:13px 14px; border:1.5px solid #d9dbe0; border-radius:10px; background:#fff; font-size:16px; font-weight:700; letter-spacing:1px; cursor:pointer; text-align:left; font-family:inherit; color:var(--ink); width:100%; }
+  .bound-item .dot{ width:18px; height:18px; border-radius:50%; border:1.5px solid #c9ccd1; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+  .bound-item.selected{ border-color:var(--green); background:#eafcf1; }
+  .bound-item.selected .dot{ border-color:var(--green); background:var(--green); }
+  .bound-item.selected .dot::after{ content:''; width:6px; height:6px; border-radius:50%; background:#fff; }
+  .link-btn{ background:none; border:none; padding:10px 0 0; font-size:12.5px; color:var(--sub); text-decoration:underline; cursor:pointer; font-family:inherit; }
 </style>
 </head>
 <body>
@@ -85,12 +93,22 @@
       <div class="lead">請詳閱以下內容並確認同意</div>
     </div>
 
-    <div>
-      <div class="field-label">請輸入您的車牌號碼</div>
-      <div class="plate-row">
-        <input type="text" id="plate1" maxlength="6" placeholder="ABC" inputmode="text">
-        <div class="dash">-</div>
-        <input type="text" id="plate2" maxlength="6" placeholder="1234" inputmode="text">
+    <div id="plate-section">
+      <!-- 已綁定車牌（查到綁定紀錄時才顯示） -->
+      <div id="bound-box" style="display:none;">
+        <div class="field-label" id="bound-label">您的車牌</div>
+        <div class="bound-list" id="bound-list"></div>
+        <button type="button" class="link-btn" id="other-car-btn">這不是我的車／換一台車</button>
+      </div>
+      <!-- 手動輸入車牌（沒有綁定紀錄，或選了「換一台車」） -->
+      <div id="plate-manual">
+        <div class="field-label">請輸入您的車牌號碼</div>
+        <div class="plate-row">
+          <input type="text" id="plate1" maxlength="6" placeholder="ABC" inputmode="text">
+          <div class="dash">-</div>
+          <input type="text" id="plate2" maxlength="6" placeholder="1234" inputmode="text">
+        </div>
+        <button type="button" class="link-btn" id="back-bound-btn" style="display:none;">‹ 回到我已綁定的車</button>
       </div>
     </div>
 
@@ -178,6 +196,15 @@
   var lineUserId = null;
   var lineDisplayName = null;
   var agreed = false;
+  var boundCars = [];        // 這個 LINE 帳號已綁定的車牌（含橫線）
+  var selectedBound = null;  // 目前選中的已綁定車牌；null 代表使用手動輸入
+
+  function normPlate(p) { return String(p || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function isKnownBound(carNo) {
+    var n = normPlate(carNo);
+    for (var i = 0; i < boundCars.length; i++) { if (normPlate(boundCars[i]) === n) return true; }
+    return false;
+  }
 
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(function (el) { el.classList.remove('active'); });
@@ -190,6 +217,7 @@
   }
 
   function getPlate() {
+    if (selectedBound) return selectedBound;
     var p1 = document.getElementById('plate1').value.trim().toUpperCase();
     var p2 = document.getElementById('plate2').value.trim().toUpperCase();
     if (!p1 || !p2) return null;
@@ -208,6 +236,74 @@
   });
   document.getElementById('plate1').addEventListener('input', updateSubmitState);
   document.getElementById('plate2').addEventListener('input', updateSubmitState);
+
+  // ---- 已綁定車牌：查詢與選擇 ----
+  function fetchBoundCars() {
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 5000) : null;
+    return fetch(SUPABASE_URL + '/rest/v1/rpc/liff_list_bindings', {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ p_line_user_id: lineUserId }),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (res) {
+      if (timer) clearTimeout(timer);
+      return res.ok ? res.json() : null;
+    }).then(function (d) {
+      return (d && Array.isArray(d.cars)) ? d.cars : [];
+    }).catch(function () {
+      if (timer) clearTimeout(timer);
+      return [];   // 查詢失敗就當作沒有綁定紀錄，維持原本手動輸入流程
+    });
+  }
+
+  function renderBoundList() {
+    var list = document.getElementById('bound-list');
+    list.innerHTML = '';
+    boundCars.forEach(function (car) {
+      var item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'bound-item' + (selectedBound === car ? ' selected' : '');
+      var dot = document.createElement('span'); dot.className = 'dot';
+      var txt = document.createElement('span'); txt.textContent = car;
+      item.appendChild(dot); item.appendChild(txt);
+      item.addEventListener('click', function () {
+        selectedBound = car;
+        renderBoundList();
+        updateSubmitState();
+      });
+      list.appendChild(item);
+    });
+    document.getElementById('bound-label').textContent =
+      boundCars.length > 1 ? '請選擇這次留車的車牌' : '您的車牌';
+  }
+
+  function showBoundMode() {
+    document.getElementById('bound-box').style.display = '';
+    document.getElementById('plate-manual').style.display = 'none';
+    selectedBound = (boundCars.length === 1) ? boundCars[0] : null;
+    renderBoundList();
+    updateSubmitState();
+  }
+
+  function showManualMode() {
+    selectedBound = null;
+    document.getElementById('bound-box').style.display = 'none';
+    document.getElementById('plate-manual').style.display = '';
+    document.getElementById('back-bound-btn').style.display = boundCars.length ? '' : 'none';
+    updateSubmitState();
+  }
+
+  document.getElementById('other-car-btn').addEventListener('click', showManualMode);
+  document.getElementById('back-bound-btn').addEventListener('click', showBoundMode);
+
+  function setupPlateSection() {
+    if (boundCars.length > 0) { showBoundMode(); } else { showManualMode(); }
+  }
 
   function attemptBind(carNo, confirmAction, oldCarNo) {
     var body = {
@@ -307,7 +403,8 @@
     btn.disabled = true;
     btn.textContent = '送出中…';
 
-    attemptBind(carNo, null, null)
+    // 這台車本來就綁在這個 LINE 帳號：用 'add' 直接更新同意時間，不要再跳「新增還是打錯」的確認
+    attemptBind(carNo, isKnownBound(carNo) ? 'add' : null, null)
       .then(function (data) {
         btn.disabled = false;
         btn.textContent = '確認送出';
@@ -369,7 +466,11 @@
       return liff.getProfile().then(function (profile) {
         lineUserId = profile.userId;
         lineDisplayName = profile.displayName;
-        showScreen('screen-notice');
+        return fetchBoundCars().then(function (cars) {
+          boundCars = cars;
+          setupPlateSection();
+          showScreen('screen-notice');
+        });
       });
     }).catch(function (err) {
       showLoadError('請透過 LINE 開啟此頁面才能完成留車登記。');
